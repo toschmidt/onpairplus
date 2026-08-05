@@ -1,0 +1,9 @@
+{
+  "name": "opp-benchmark",
+  "version-string": "0.1.0",
+  "dependencies": [
+    "lz4",
+    "zstd",
+    "brotli"
+  ]
+}

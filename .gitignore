@@ -1,0 +1,6 @@
+build/
+build-nb/
+data/
+benchmark/build/
+.venv/
+.idea/
