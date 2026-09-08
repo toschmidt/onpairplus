@@ -15,7 +15,8 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
-ORDER = ["lz4", "fsst", "zstd", "brotli", "tokenizer", "opp", "opp+lz4", "opp+zstd"]
+ORDER = ["lz4", "fsst", "zstd", "brotli", "tokenizer", "onpair", "onpair16", "opp", "opp+lz4",
+         "opp+zstd"]
 MIB = float(1 << 20)
 
 

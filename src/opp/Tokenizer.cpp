@@ -129,10 +129,10 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
       std::vector<ShortTokenEntry> entries;
       entries.reserve(tokenMaps4[1].size() + tokenMaps8[0].size() + tokenMaps8[1].size() + tokenMaps8[2].size() + tokenMaps8[3].size());
       for (const auto& [key, id] : tokenMaps4[1])
-         entries.push_back({key, MASKS[4], id, 4});
+         entries.push_back({key, id, 4});
       for (unsigned l = 5; l <= 8; ++l)
          for (const auto& [key, id] : tokenMaps8[l - 5])
-            entries.push_back({key >> ((8 - l) * 8), MASKS[l], id, l});
+            entries.push_back({key >> ((8 - l) * 8), id, l});
       std::sort(entries.begin(), entries.end(), [](const ShortTokenEntry& a, const ShortTokenEntry& b) {
          return a.length != b.length ? a.length > b.length : a.id < b.id;
       });
@@ -143,7 +143,7 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
       shortTokenMap.initialize(keys);
       for (const auto& entry : entries) shortTokenMap[static_cast<uint32_t>(entry.text)] = entry;
       if (!shortTokenMap.empty())
-         shortTokenMap.setDefault(ShortTokenEntry{.text = 1, .mask = 0, .id = 0, .length = 1}); // never matches
+         shortTokenMap.setDefault(ShortTokenEntry{.text = 1, .id = 0, .length = 0}); // never matches
    }
 
    // The long symbol map (9..16 bytes), keyed by the first 8 bytes, bucket entries sorted
@@ -152,7 +152,7 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
       std::vector<LongTokenEntry> entries;
       for (const auto& [prefix, bucket] : longLookupTable)
          for (const auto& [suffix, suffixLen, id] : bucket)
-            entries.push_back({prefix, suffix, MASKS[suffixLen], id, 8u + suffixLen});
+            entries.push_back({prefix, suffix, id, 8u + suffixLen});
       std::sort(entries.begin(), entries.end(), [](const LongTokenEntry& a, const LongTokenEntry& b) {
          return a.length != b.length ? a.length > b.length : a.id < b.id;
       });
@@ -163,7 +163,7 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
       longTokenMap.initialize(keys);
       for (const auto& entry : entries) longTokenMap[entry.prefix] = entry;
       if (!longTokenMap.empty())
-         longTokenMap.setDefault(LongTokenEntry{.prefix = 0, .postfix = 1, .mask = 0, .id = 0, .length = 1}); // never matches
+         longTokenMap.setDefault(LongTokenEntry{.prefix = 0, .postfix = 1, .id = 0, .length = 8}); // never matches
    }
 }
 //---------------------------------------------------------------------------

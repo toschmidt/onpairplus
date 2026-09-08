@@ -24,14 +24,12 @@ namespace opp {
 struct ShortTokenEntry {
    /// The symbol bytes (little-endian, masked to its length)
    uint64_t text;
-   /// The mask covering the symbol's length
-   uint64_t mask;
    /// The token id
    uint32_t id;
    /// The symbol length in bytes
    uint32_t length;
 };
-static_assert(sizeof(ShortTokenEntry) == 24);
+static_assert(sizeof(ShortTokenEntry) == 16);
 //---------------------------------------------------------------------------
 /// A compression-table entry for long symbols (9..16 bytes). Unlike the reference's exact-prefix
 /// buckets, a MultiHashMap bucket can hold entries of several prefixes, so the prefix is stored
@@ -41,14 +39,12 @@ struct LongTokenEntry {
    uint64_t prefix;
    /// The remaining symbol bytes (little-endian, masked to their length)
    uint64_t postfix;
-   /// The mask covering the postfix length
-   uint64_t mask;
    /// The token id
    uint32_t id;
    /// The symbol length in bytes
    uint32_t length;
 };
-static_assert(sizeof(LongTokenEntry) == 32);
+static_assert(sizeof(LongTokenEntry) == 24);
 //---------------------------------------------------------------------------
 /// The Longest Prefix Matcher used to build the dictionary and tokenize the input.
 ///
@@ -134,9 +130,8 @@ class Tokenizer {
    /// `data` must have at least 16 readable bytes (the dense path). finalize() must have been
    /// called. Defined in the header so the hot loop can be inlined.
    std::pair<uint16_t, size_t> match(const uint8_t* data) const {
-      uint64_t text, postfix;
+      uint64_t text;
       std::memcpy(&text, data, sizeof(text));
-      std::memcpy(&postfix, data + 8, sizeof(postfix));
 
       // Both directory lookups are issued before either bucket is walked, so their cache misses
       // overlap. The match loop is a serial dependency chain - the next position is only known
@@ -145,16 +140,20 @@ class Tokenizer {
       auto [shortEntry, shortEnd] = shortTokenMap.find(static_cast<uint32_t>(text));
 
       // Long symbols (9..16 bytes), keyed by the first 8 bytes, bucket entries longest-first
-      for (; longEntry < longEnd; ++longEntry)
-         if (longEntry->prefix == text && (postfix & longEntry->mask) == longEntry->postfix)
-            return {static_cast<uint16_t>(longEntry->id), longEntry->length};
+      if (longEntry < longEnd) {
+         uint64_t postfix;
+         std::memcpy(&postfix, data + 8, sizeof(postfix));
+         for (; longEntry < longEnd; ++longEntry)
+            if (longEntry->prefix == text && (postfix & MASKS[longEntry->length - 8]) == longEntry->postfix)
+               return {static_cast<uint16_t>(longEntry->id), longEntry->length};
+      }
       // The 4..8 byte bucket, keyed by the first 4 bytes, entries longest-first
       if (!shortTokenMap.empty()) {
          // Fast path: unroll the first 4 entries (the padding past the last bucket never matches)
          for (unsigned i = 0; i < 4; ++i, ++shortEntry)
-            if ((text & shortEntry->mask) == shortEntry->text) return {static_cast<uint16_t>(shortEntry->id), shortEntry->length};
+            if ((text & MASKS[shortEntry->length]) == shortEntry->text) return {static_cast<uint16_t>(shortEntry->id), shortEntry->length};
          for (; shortEntry < shortEnd; ++shortEntry)
-            if ((text & shortEntry->mask) == shortEntry->text) return {static_cast<uint16_t>(shortEntry->id), shortEntry->length};
+            if ((text & MASKS[shortEntry->length]) == shortEntry->text) return {static_cast<uint16_t>(shortEntry->id), shortEntry->length};
       }
       // The 3-byte map (key 0, i.e. three zero bytes, is the map's empty sentinel - skip it)
       if (const auto key = static_cast<uint32_t>(text) << 8; key != 0)
@@ -174,20 +173,22 @@ class Tokenizer {
 
       // Long symbols (9..16 bytes), keyed by the first 8 bytes, bucket entries longest-first
       if (length > 8) {
-         const uint64_t postfix = loadPartial(data + 8, length - 8);
          auto [entry, end] = longTokenMap.find(text);
-         for (; entry < end; ++entry)
-            if (entry->prefix == text && (postfix & entry->mask) == entry->postfix)
-               return {static_cast<uint16_t>(entry->id), entry->length};
+         if (entry < end) {
+            const uint64_t postfix = loadPartial(data + 8, length - 8);
+            for (; entry < end; ++entry)
+               if (entry->prefix == text && (postfix & MASKS[entry->length - 8]) == entry->postfix)
+                  return {static_cast<uint16_t>(entry->id), entry->length};
+         }
       }
       // The 4..8 byte bucket, keyed by the first 4 bytes, entries longest-first
       if (!shortTokenMap.empty()) {
          auto [entry, end] = shortTokenMap.find(static_cast<uint32_t>(text));
          // Fast path: unroll the first 4 entries (the padding past the last bucket never matches)
          for (unsigned i = 0; i < 4; ++i, ++entry)
-            if ((text & entry->mask) == entry->text) return {static_cast<uint16_t>(entry->id), entry->length};
+            if ((text & MASKS[entry->length]) == entry->text) return {static_cast<uint16_t>(entry->id), entry->length};
          for (; entry < end; ++entry)
-            if ((text & entry->mask) == entry->text) return {static_cast<uint16_t>(entry->id), entry->length};
+            if ((text & MASKS[entry->length]) == entry->text) return {static_cast<uint16_t>(entry->id), entry->length};
       }
       // The 3-byte map (key 0, i.e. three zero bytes, is the map's empty sentinel - skip it)
       if (const auto key = static_cast<uint32_t>(text) << 8; key != 0)

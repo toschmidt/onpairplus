@@ -90,6 +90,18 @@ opp::decode(compressed, restored);
 vcpkg, upstream FSST built from source; all in-memory library calls, best-of-N, roundtrip
 verified). The rest of the repository has no dependencies.
 
+Two of the competitors are the direct ancestors of this implementation, built from the sources
+vendored in a sibling `token-vldb2026` checkout (point `-DTOKEN_VLDB_DIR=` elsewhere if needed):
+
+- **onpair / onpair16** &mdash; the reference OnPair implementation (Gargiulo and Venturini,
+  arXiv:2508.02280), unbounded and 16-byte symbol lengths. `onpair16` is the like-for-like
+  baseline for opp, so the gap between them is what the changes listed above buy.
+- **tokenizer** &mdash; the SGTT tokenizer, a fixed OpenAI-100k token table with no training at
+  all, which bounds how fast a 16-bit token decoder can go.
+
+Both compress the whole input as a single string, like every other compressor here, and both
+count their dictionary against the compressed size, exactly as opp's stream format does.
+
 ```sh
 ./benchmark.py dbtext        # or: bitext, wiki9; downloads datasets into ./data
 ```
@@ -103,21 +115,30 @@ brotli -q 5.
 
 | compressor | ratio | enc MiB/s | dec MiB/s |
 |------------|------:|----------:|----------:|
-| lz4        | 1.96  |     695   |    4760   |
-| fsst       | 1.65  |     422   |    4322   |
-| zstd       | 3.21  |     325   |    1380   |
-| brotli     | 3.60  |      79   |     579   |
-| tokenizer  | 1.63  |     283   |    8377   |
-| **opp**    | **2.82** | **229** | **7608** |
-| opp+lz4    | 3.22  |     211   |    4973   |
-| opp+zstd   | 3.50  |     175   |    1929   |
+| lz4        | 1.96  |     691   |    4743   |
+| fsst       | 1.65  |     418   |    4307   |
+| zstd       | 3.21  |     322   |    1295   |
+| brotli     | 3.60  |      79   |     576   |
+| tokenizer  | 1.63  |     282   |    8176   |
+| onpair     | 2.83  |     103   |    4229   |
+| onpair16   | 2.75  |     114   |    5015   |
+| **opp**    | **2.82** | **225** | **9256** |
+| opp+lz4    | 3.22  |     205   |    5278   |
+| opp+zstd   | 3.50  |     162   |    1952   |
 
-opp decompresses fastest of the trained field at a ratio between lz4 and zstd, while the two
-static-table baselines (fsst's 255 symbols, the tokenizer's fixed OpenAI-100k table from
-token-vldb2026) stay below ratio 1.7 on this corpus. The chained variants run a second
-general-purpose compressor over opp's token stream: opp+lz4 beats zstd's ratio at 4.2x its
-decompression speed, and opp+zstd reaches 3.50 — within 3% of brotli — while decompressing
-1.6x faster than plain zstd.
+opp decompresses fastest of the whole field at a ratio between lz4 and zstd, while the two
+static-table baselines (fsst's 255 symbols, the tokenizer's fixed OpenAI-100k table) stay below
+ratio 1.7 on this corpus.
+
+Against its own ancestors the picture depends on the input size. On a corpus this large the
+reference OnPair reaches the same ratio (2.83 / 2.75 versus opp's 2.82) — a full dictionary is
+amortized over a gigabyte, so the bounded table and hybrid serialization buy little. What remains
+is speed: opp encodes 2.0x faster than onpair16 and decodes 1.8x faster. The ratio gain shows up
+on smaller inputs, where the dictionary is a real share of the output (see dbtext below).
+
+The chained variants run a second general-purpose compressor over opp's token stream: opp+lz4
+beats zstd's ratio at 4.1x its decompression speed, and opp+zstd reaches 3.50 — within 3% of
+brotli — while decompressing 1.5x faster than plain zstd.
 
 **dbtext** (23 database string columns, 38 MiB) and **bitext** (106 machine-translation corpora,
 12.7 GiB), per-file distributions (boxes 25/50/75, whiskers 5/95 percentiles):
@@ -134,8 +155,8 @@ decompression speed, and opp+zstd reaches 3.50 — within 3% of brotli — while
 
 ![bitext decode speed](plots/bitext_dec.png)
 
-Aggregate ratios: dbtext — opp 2.51, opp+zstd 2.77 (zstd 2.77, fsst 2.14);
-bitext — opp 2.80, opp+zstd 3.29 (zstd 2.98, brotli 3.16). opp decodes at 6-7 GiB/s throughout
+Aggregate ratios: dbtext — opp 2.51, opp+zstd 2.77 (zstd 2.77, onpair16 1.91);
+bitext — opp 2.80, opp+zstd 3.29 (zstd 2.98, onpair16 2.74). opp decodes at 7-9 GiB/s throughout
 and encodes at 89 MiB/s (dbtext) to 135 MiB/s (bitext); the small-file end is dominated by
 dictionary training, not by matching.
 Per-file CSVs live in `results/`, regenerate the plots with `tools/plot_results.py`.

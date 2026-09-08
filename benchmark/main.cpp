@@ -1,6 +1,7 @@
 #include "brotli.hpp"
 #include "fsst.hpp"
 #include "lz4.hpp"
+#include "onpair.hpp"
 #include "opp.hpp"
 #include "tokenizer.hpp"
 #include "zstd.hpp"
@@ -55,6 +56,8 @@ const Compressor COMPRESSORS[] = {
    {bench::brotli::name, bench::brotli::compress, bench::brotli::decompress},
    {bench::fsst::name, bench::fsst::compress, bench::fsst::decompress},
    {bench::tokenizer::name, bench::tokenizer::compress, bench::tokenizer::decompress},
+   {bench::onpair::name, bench::onpair::compress, bench::onpair::decompress},
+   {bench::onpair16::name, bench::onpair16::compress, bench::onpair16::decompress},
    OPP,
    chain("opp+lz4", OPP, LZ4),
    chain("opp+zstd", OPP, ZSTD),

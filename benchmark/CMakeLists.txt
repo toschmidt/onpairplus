@@ -55,6 +55,13 @@ target_include_directories(sgtt_tokenizer PUBLIC "${TOKEN_VLDB_DIR}/src")
 # reference code, silence its warnings and patch in std headers it gets transitively upstream
 target_compile_options(sgtt_tokenizer PRIVATE -w -include "${CMAKE_CURRENT_SOURCE_DIR}/tokenizer_prelude.hpp")
 
+# The reference OnPair implementation (vendored in token-vldb2026/thirdparty), i.e. the algorithm
+# OnPair+ extends - built straight from its sources so it is measured on the same footing
+set(ONPAIR_DIR "${TOKEN_VLDB_DIR}/thirdparty/onpair")
+add_library(onpair_upstream STATIC "${ONPAIR_DIR}/src/onpair.cpp" "${ONPAIR_DIR}/src/onpair16.cpp")
+target_include_directories(onpair_upstream PUBLIC "${ONPAIR_DIR}/include" "${ONPAIR_DIR}/external/robin_hood")
+target_compile_options(onpair_upstream PRIVATE -w) # upstream code, silence its warnings
+
 # The compressor under test
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/.." "${CMAKE_CURRENT_BINARY_DIR}/onpairplus")
 
@@ -62,6 +69,7 @@ add_executable(benchmark main.cpp)
 target_link_libraries(benchmark PRIVATE
         onpairplus
         sgtt_tokenizer
+        onpair_upstream
         lz4::lz4
         zstd::libzstd
         unofficial::brotli::brotlienc

@@ -30,27 +30,29 @@ class OnPairPlusDecoder {
    /// true length). Defined in the header so the hot loop can be inlined.
    void decode(const std::span<const std::byte> tokens, const std::span<std::byte> output) const {
       auto* writer = output.data();
+      const auto* symbolTable = symbols.data();
+      const auto* lengthTable = lengths.data();
 
       const auto* reader = reinterpret_cast<const uint16_t*>(tokens.data());
       const auto* end = reinterpret_cast<const uint16_t*>(tokens.data() + tokens.size());
       for (; reader + 4 <= end; reader += 4) {
          const auto token0 = reader[0];
-         unalignedStore(writer, symbols[token0]);
-         writer += lengths[token0];
+         unalignedStore(writer, symbolTable[token0]);
+         writer += lengthTable[token0];
          const auto token1 = reader[1];
-         unalignedStore(writer, symbols[token1]);
-         writer += lengths[token1];
+         unalignedStore(writer, symbolTable[token1]);
+         writer += lengthTable[token1];
          const auto token2 = reader[2];
-         unalignedStore(writer, symbols[token2]);
-         writer += lengths[token2];
+         unalignedStore(writer, symbolTable[token2]);
+         writer += lengthTable[token2];
          const auto token3 = reader[3];
-         unalignedStore(writer, symbols[token3]);
-         writer += lengths[token3];
+         unalignedStore(writer, symbolTable[token3]);
+         writer += lengthTable[token3];
       }
       for (; reader < end; ++reader) {
          const auto token = reader[0];
-         unalignedStore(writer, symbols[token]);
-         writer += lengths[token];
+         unalignedStore(writer, symbolTable[token]);
+         writer += lengthTable[token];
       }
    }
 };
