@@ -36,6 +36,7 @@ size_t OnPairPlusDecoder::readDictionary(const std::span<const std::byte> input)
       if (K) totalTokens += count;
    }
    for (unsigned l = 2; l <= MAX_LENGTHS; ++l) totalTokens += counts[l - 1];
+   numTokens = totalTokens;
    symbols.resize(totalTokens + 1);
    lengths.resize(totalTokens + 1);
 

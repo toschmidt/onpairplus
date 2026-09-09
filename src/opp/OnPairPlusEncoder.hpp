@@ -30,6 +30,24 @@ class OnPairPlusEncoder {
    std::vector<uint8_t> shortSymbols;
    /// The merge recipes (two parent final-ids) of the longer kept trained symbols, in final id order
    std::vector<uint16_t> recipes;
+   /// The physical id width chosen for the token stream (12 or 16 bits)
+   uint8_t tokenBitsValue = 16;
+   /// The id counts the two candidates produced on the evaluation prefix (0 if not evaluated)
+   uint64_t tokenCount12Value = 0;
+   uint64_t tokenCount16Value = 0;
+   /// Whether the full-table candidate was built and counted at all
+   bool comparedFullTableValue = false;
+
+   /// One finalized dictionary: its tables, the blocks serializeDictionary() writes, and the
+   /// number of tokens it defines (which implies the stream's id width)
+   struct Candidate {
+      Tokenizer tokenizer;
+      std::vector<NgramLevel> levels;
+      std::array<uint16_t, MAX_LENGTHS> lengthHistogram{};
+      std::vector<uint8_t> shortSymbols;
+      std::vector<uint16_t> recipes;
+      size_t dictionaryTokens = 0;
+   };
 
    public:
    /// Train a dictionary on the input (streaming merge pass + n-gram seeding of the leftover
@@ -39,8 +57,18 @@ class OnPairPlusEncoder {
    /// Serialize the finalized dictionary into `out` ([char bitmaps][length histogram][short raw
    /// bytes][long recipes]). Returns the serialized size.
    size_t serializeDictionary(std::span<std::byte> out) const;
-   /// Tokenize the input into `out` as a stream of final token ids. Returns the number of bytes written.
+   /// Tokenize the input into `out` as a stream of final token ids, packed to the width chosen by
+   /// trainDictionary(). Returns the number of bytes written.
    size_t compress(std::span<std::byte> out) const;
+
+   /// The physical id width chosen for the token stream (12 or 16 bits)
+   uint8_t tokenBits() const { return tokenBitsValue; }
+   /// The id count the 12-bit candidate produced on the evaluation prefix
+   uint64_t tokenCount12() const { return tokenCount12Value; }
+   /// The id count the full-table candidate produced, or 0 if it was not evaluated
+   uint64_t tokenCount16() const { return tokenCount16Value; }
+   /// Whether the full-table candidate was built and counted
+   bool comparedFullTable() const { return comparedFullTableValue; }
 };
 //---------------------------------------------------------------------------
 }
