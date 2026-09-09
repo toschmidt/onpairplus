@@ -48,12 +48,13 @@ Compressor chain(const char* name, const Compressor& first, const Compressor& se
 //---------------------------------------------------------------------------
 const Compressor LZ4 = {bench::lz4::name, bench::lz4::compress, bench::lz4::decompress};
 const Compressor ZSTD = {bench::zstd::name, bench::zstd::compress, bench::zstd::decompress};
+const Compressor BROTLI = {bench::brotli::name, bench::brotli::compress, bench::brotli::decompress};
 const Compressor OPP = {bench::opp::name, bench::opp::compress, bench::opp::decompress};
 //---------------------------------------------------------------------------
 const Compressor COMPRESSORS[] = {
    LZ4,
    ZSTD,
-   {bench::brotli::name, bench::brotli::compress, bench::brotli::decompress},
+   BROTLI,
    {bench::fsst::name, bench::fsst::compress, bench::fsst::decompress},
    {bench::tokenizer::name, bench::tokenizer::compress, bench::tokenizer::decompress},
    {bench::onpair::name, bench::onpair::compress, bench::onpair::decompress},
@@ -61,6 +62,7 @@ const Compressor COMPRESSORS[] = {
    OPP,
    chain("opp+lz4", OPP, LZ4),
    chain("opp+zstd", OPP, ZSTD),
+   chain("opp+brotli", OPP, BROTLI),
 };
 //---------------------------------------------------------------------------
 std::vector<std::byte> readFile(const std::string& path) {

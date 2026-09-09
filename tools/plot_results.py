@@ -16,12 +16,12 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 ORDER = ["lz4", "fsst", "zstd", "brotli", "tokenizer", "onpair", "onpair16", "opp", "opp+lz4",
-         "opp+zstd"]
+         "opp+zstd", "opp+brotli"]
 MIB = float(1 << 20)
 
 
 def draw(dataset: str, metric: str, ylabel: str, values: dict) -> None:
-    fig, ax = plt.subplots(figsize=(7.5, 3.2))
+    fig, ax = plt.subplots(figsize=(9.6, 3.2))
     data = [values[c] for c in ORDER]
     boxes = ax.boxplot(data, tick_labels=ORDER, patch_artist=True, widths=0.55,
                        whis=(5, 95), medianprops={"color": "black"},
@@ -35,6 +35,7 @@ def draw(dataset: str, metric: str, ylabel: str, values: dict) -> None:
         ax.annotate(label, (pos + 0.31, median), va="center", fontsize=8)
     ax.set_ylabel(ylabel)
     ax.set_title(f"{dataset}: per-file {ylabel} ({len(data[0])} files)")
+    ax.tick_params(axis="x", labelsize=8)
     ax.grid(axis="y", alpha=0.3)
     fig.tight_layout()
     out = Path("plots") / f"{dataset}_{metric}.png"
