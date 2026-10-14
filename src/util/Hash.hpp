@@ -1,5 +1,6 @@
 #pragma once
 //---------------------------------------------------------------------------
+#include <cstddef>
 #include <cstdint>
 #include <utility>
 //---------------------------------------------------------------------------
@@ -22,9 +23,9 @@ struct Hasher {
       return mulFold(k4 ^ 16, mulFold(v1 ^ k1, v2 ^ k0));
    }
    /// Function-call operators
-   constexpr size_t operator()(uint64_t v) const noexcept { return hashTwo(v, v); }
+   constexpr std::size_t operator()(uint64_t v) const noexcept { return hashTwo(v, v); }
    template <typename A, typename B>
-   constexpr size_t operator()(const std::pair<A, B>& p) const noexcept {
+   constexpr std::size_t operator()(const std::pair<A, B>& p) const noexcept {
       return hashTwo(static_cast<uint64_t>(p.first), static_cast<uint64_t>(p.second));
    }
 };
