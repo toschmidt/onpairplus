@@ -30,8 +30,9 @@ class MultiHashMap {
    uint64_t slotOf(const Key key) const noexcept { return fasthash(static_cast<uint64_t>(key)) >> shift; }
 
    public:
-   /// Constructor
-   MultiHashMap() { directory.resize(2, 0); }
+   /// Constructor: an empty map still maps a key to slot 0 or 1 (shift 63), and find() reads the
+   /// directory at slot + 1, so it needs three empty entries
+   MultiHashMap() { directory.resize(3, 0); }
 
    /// Whether the map holds no entries
    bool empty() const noexcept { return values.empty(); }
