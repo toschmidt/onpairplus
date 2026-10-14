@@ -17,19 +17,21 @@ namespace opp {
 /// no id remapping survives training; serializeDictionary() writes the finalized hybrid format;
 /// compress() tokenizes the input directly into final ids.
 class OnPairPlusEncoder {
+   /// The memory resource every table allocates from
+   std::pmr::memory_resource* memory;
    /// The tokenizer used for training and compression
    Tokenizer tokenizer;
    /// The input, set by trainDictionary(); must remain valid until compress() has been called
    std::span<const uint8_t> input;
 
    /// The seeded n-gram levels
-   std::vector<NgramLevel> levels;
+   Vector<NgramLevel> levels;
    /// The finalized length histogram of the dictionary (256 singles + kept trained symbols)
    std::array<uint16_t, MAX_LENGTHS> lengthHistogram{};
    /// The raw bytes of the kept trained symbols of length 2..HYBRID_SHORT_MAX, in final id order
-   std::vector<uint8_t> shortSymbols;
+   Vector<uint8_t> shortSymbols;
    /// The merge recipes (two parent final-ids) of the longer kept trained symbols, in final id order
-   std::vector<uint16_t> recipes;
+   Vector<uint16_t> recipes;
    /// The physical id width chosen for the token stream (12 or 16 bits)
    uint8_t tokenBitsValue = 16;
    /// The id counts the two candidates produced on the evaluation prefix (0 if not evaluated)
@@ -42,14 +44,20 @@ class OnPairPlusEncoder {
    /// number of tokens it defines (which implies the stream's id width)
    struct Candidate {
       Tokenizer tokenizer;
-      std::vector<NgramLevel> levels;
+      Vector<NgramLevel> levels;
       std::array<uint16_t, MAX_LENGTHS> lengthHistogram{};
-      std::vector<uint8_t> shortSymbols;
-      std::vector<uint16_t> recipes;
+      Vector<uint8_t> shortSymbols;
+      Vector<uint16_t> recipes;
       size_t dictionaryTokens = 0;
+
+      /// Constructor
+      explicit Candidate(std::pmr::memory_resource* memory) : tokenizer(memory), levels(memory), shortSymbols(memory), recipes(memory) {}
    };
 
    public:
+   /// Constructor: every table of the encoder allocates from `memory`
+   explicit OnPairPlusEncoder(std::pmr::memory_resource* memory = std::pmr::get_default_resource()) : memory(memory), tokenizer(memory), levels(memory), shortSymbols(memory), recipes(memory) {}
+
    /// Train a dictionary on the input (streaming merge pass + n-gram seeding of the leftover
    /// token-id space), initialize the tokenizer with final token ids, and build the finalized
    /// dictionary blocks

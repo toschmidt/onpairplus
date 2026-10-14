@@ -142,7 +142,8 @@ Per-file CSVs live in `results/`, regenerate the plots with `tools/plot_results.
 
 This repository ports OnPair+ out of its research codebase and evolves it:
 
-- **Plain blob API** (`opp::encode` / `opp::decode` over byte spans) and a minimal, self-delimiting
+- **Plain blob API** (`opp::encode` / `opp::decode` over byte spans, `opp::decodeInto` into a
+  caller's buffer, all memory from a caller's `std::pmr::memory_resource`) and a minimal, self-delimiting
   stream format: `[uncompressedSize u64][dictionary][token stream]` — 8 bytes of metadata total.
 - **Final ids during training**: the length-sort, n-gram dedup, and id assignment are folded into
   the training phase (the tokenizer's tables are rewritten once), so no remap of the token stream
@@ -202,10 +203,18 @@ output); `-DOPP_USE_BOOST=OFF` forces the vendored one.
 
 ```cpp
 #include "OnPairPlus.hpp"
-std::vector<std::byte> compressed, restored;
+opp::Vector<std::byte> compressed, restored; // std::pmr::vector
 opp::encode(input, compressed);
 opp::decode(compressed, restored);
+
+// Decode into your own buffer (16 bytes of headroom for the decoder)
+std::vector<std::byte> output(opp::decodedSize(compressed) + 16);
+opp::decodeInto(compressed, output);
 ```
+
+Every allocation of `encode` comes from the memory resource of the output vector, every allocation of
+`decodeInto` from the resource it is passed (`std::pmr::memory_resource*`, the global heap by
+default), so OnPair+ can run on an arena or a database's own allocator.
 
 ## Benchmark
 

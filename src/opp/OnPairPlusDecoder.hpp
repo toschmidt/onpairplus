@@ -15,13 +15,16 @@ namespace opp {
 class OnPairPlusDecoder {
    /// The materialized symbols (16 bytes each; writes may spill into the next entry, hence +1
    /// sentinel). Sized by readDictionary() to the exact token count of the stream's dictionary.
-   std::vector<uint128_t> symbols;
+   Vector<uint128_t> symbols;
    /// The symbol lengths in bytes
-   std::vector<uint8_t> lengths;
+   Vector<uint8_t> lengths;
    /// The number of tokens the dictionary defines, set by readDictionary()
    size_t numTokens = 0;
 
    public:
+   /// Constructor: the symbol table allocates from `memory`
+   explicit OnPairPlusDecoder(std::pmr::memory_resource* memory = std::pmr::get_default_resource()) : symbols(memory), lengths(memory) {}
+
    /// Reconstruct the symbol table from the dictionary at the beginning of `input`.
    /// Returns the number of bytes the dictionary used; the token stream starts right after.
    size_t readDictionary(std::span<const std::byte> input);

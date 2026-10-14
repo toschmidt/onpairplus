@@ -3,8 +3,11 @@
 #include "opp/Tokenizer.hpp"
 #include "util/Infra.hpp"
 #include "catch2/catch_test_macros.hpp"
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <memory_resource>
+#include <new>
 #include <random>
 #include <string>
 #include <vector>
@@ -24,10 +27,10 @@ std::vector<std::byte> toBytes(const std::string& s) {
 //---------------------------------------------------------------------------
 /// Roundtrip an input through encode/decode and check the output matches; returns the compressed size
 size_t roundtrip(const std::vector<std::byte>& input) {
-   std::vector<std::byte> compressed, restored;
+   opp::Vector<std::byte> compressed, restored;
    opp::encode(input, compressed);
    opp::decode(compressed, restored);
-   REQUIRE(restored == input);
+   REQUIRE(std::ranges::equal(restored, input));
    return compressed.size();
 }
 //---------------------------------------------------------------------------
@@ -101,7 +104,7 @@ TEST_CASE("Determinism") {
    std::mt19937 g(7);
    std::vector<std::byte> input(200000);
    for (auto& b : input) b = static_cast<std::byte>('a' + g() % 16);
-   std::vector<std::byte> first, second;
+   opp::Vector<std::byte> first, second;
    opp::encode(input, first);
    opp::encode(input, second);
    REQUIRE(first == second);
@@ -110,7 +113,7 @@ TEST_CASE("Determinism") {
 TEST_CASE("StreamFormat") {
    // The stream starts with the uncompressed size
    const auto input = toBytes("hello world, hello world, hello world");
-   std::vector<std::byte> compressed;
+   opp::Vector<std::byte> compressed;
    opp::encode(input, compressed);
    uint64_t storedSize;
    std::memcpy(&storedSize, compressed.data(), sizeof(storedSize));
@@ -120,9 +123,62 @@ TEST_CASE("StreamFormat") {
 TEST_CASE("DecodeErrors") {
    // Too-small inputs must throw instead of crashing
    for (size_t size : {0ul, 1ul, 7ul, 8ul, 20ul}) {
-      std::vector<std::byte> bogus(size), output;
+      std::vector<std::byte> bogus(size);
+      opp::Vector<std::byte> output;
       REQUIRE_THROWS(opp::decode(bogus, output));
    }
+}
+//---------------------------------------------------------------------------
+TEST_CASE("DecodeInto") {
+   // Decoding into the caller's buffer (decodedSize + 16 bytes) yields the input and its size
+   std::mt19937 g(11);
+   std::vector<std::byte> input(100000);
+   for (auto& b : input) b = static_cast<std::byte>('a' + g() % 20);
+   opp::Vector<std::byte> compressed;
+   opp::encode(input, compressed);
+   REQUIRE(opp::decodedSize(compressed) == input.size());
+   std::vector<std::byte> output(input.size() + 16);
+   REQUIRE(opp::decodeInto(compressed, output) == input.size());
+   REQUIRE(std::equal(input.begin(), input.end(), output.begin()));
+   // A buffer without the 16 bytes of headroom is rejected
+   std::vector<std::byte> tooSmall(input.size());
+   REQUIRE_THROWS(opp::decodeInto(compressed, tooSmall));
+}
+//---------------------------------------------------------------------------
+namespace {
+/// A memory resource that counts its allocations and the ones still live
+struct CountingResource final : std::pmr::memory_resource {
+   size_t allocations = 0, live = 0;
+   void* do_allocate(size_t bytes, size_t alignment) override {
+      ++allocations;
+      ++live;
+      return ::operator new(bytes, std::align_val_t(alignment));
+   }
+   void do_deallocate(void* p, size_t, size_t alignment) override {
+      --live;
+      ::operator delete(p, std::align_val_t(alignment));
+   }
+   bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override { return this == &other; }
+};
+}
+//---------------------------------------------------------------------------
+TEST_CASE("MemoryResource") {
+   // Encoding and decoding allocate from the resource the caller passes, and the result does not depend on it
+   std::mt19937 g(13);
+   std::vector<std::byte> input(300000);
+   for (auto& b : input) b = static_cast<std::byte>('a' + g() % 24);
+   CountingResource encodeMemory, decodeMemory;
+   opp::Vector<std::byte> compressed(&encodeMemory), reference;
+   opp::encode(input, compressed);
+   opp::encode(input, reference);
+   REQUIRE(encodeMemory.allocations > 1); // the encoder's tables, not only the output
+   REQUIRE(encodeMemory.live == 1); // only the output is still allocated
+   REQUIRE(std::ranges::equal(compressed, reference));
+   std::vector<std::byte> output(input.size() + 16);
+   opp::decodeInto(compressed, output, &decodeMemory);
+   REQUIRE(decodeMemory.allocations > 0);
+   REQUIRE(decodeMemory.live == 0);
+   REQUIRE(std::equal(input.begin(), input.end(), output.begin()));
 }
 //---------------------------------------------------------------------------
 TEST_CASE("Matcher") {

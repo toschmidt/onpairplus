@@ -1,6 +1,7 @@
 #pragma once
 //---------------------------------------------------------------------------
 #include "util/Hash.hpp"
+#include "util/Infra.hpp"
 #include <cassert>
 #include <cstdint>
 #include <span>
@@ -20,7 +21,7 @@ class LossyHashMap {
    /// The right-shift mapping a hash to a slot
    uint32_t shift = 63;
    /// The slots
-   std::vector<std::pair<Key, Value>> values;
+   Vector<std::pair<Key, Value>> values;
    /// Written by access() for dropped keys
    Value overflow{};
 
@@ -29,7 +30,7 @@ class LossyHashMap {
 
    public:
    /// Constructor
-   LossyHashMap() { values.resize(3); }
+   explicit LossyHashMap(Allocator alloc = {}) : values(3, alloc) {}
 
    /// Size the table for the given keys (call once, before any access)
    void initialize(const std::span<const Key> keys) {

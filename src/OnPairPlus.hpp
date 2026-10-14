@@ -1,8 +1,9 @@
 #pragma once
 //---------------------------------------------------------------------------
+#include "util/Infra.hpp"
 #include <cstddef>
+#include <memory_resource>
 #include <span>
-#include <vector>
 //---------------------------------------------------------------------------
 // OnPairPlus - standalone OnPair+ string compressor
 // (c) 2026 Tobias Schmidt, Nicolas Schmitt - MIT License
@@ -15,9 +16,17 @@
 //---------------------------------------------------------------------------
 namespace opp {
 //---------------------------------------------------------------------------
-/// Compress `input` into `output` (replacing its previous contents)
-void encode(std::span<const std::byte> input, std::vector<std::byte>& output);
-/// Decompress `input` (as produced by encode) into `output` (replacing its previous contents)
-void decode(std::span<const std::byte> input, std::vector<std::byte>& output);
+/// Compress `input` into `output` (replacing its previous contents); every allocation of the encoder
+/// comes from the memory resource of `output`
+void encode(std::span<const std::byte> input, Vector<std::byte>& output);
+/// Decompress `input` (as produced by encode) into `output` (replacing its previous contents); the
+/// symbol table comes from the memory resource of `output`
+void decode(std::span<const std::byte> input, Vector<std::byte>& output);
+/// The uncompressed size of `input` (as produced by encode)
+size_t decodedSize(std::span<const std::byte> input);
+/// Decompress `input` into `output`, which must hold decodedSize(input) + 16 bytes (the decoder
+/// stores 16 bytes per symbol); the bytes past the decoded size are overwritten. Returns the decoded size
+/// The symbol table comes from `memory`.
+size_t decodeInto(std::span<const std::byte> input, std::span<std::byte> output, std::pmr::memory_resource* memory = std::pmr::get_default_resource());
 //---------------------------------------------------------------------------
 }

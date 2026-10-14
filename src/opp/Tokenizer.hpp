@@ -1,6 +1,7 @@
 #pragma once
 //---------------------------------------------------------------------------
 #include "util/Hash.hpp"
+#include "util/Infra.hpp"
 #include "util/LossyHashMap.hpp"
 #include "util/MultiHashMap.hpp"
 #include "util/TrainMap.hpp"
@@ -69,15 +70,17 @@ class Tokenizer {
    /// Maximum entries per bucket
    static constexpr size_t MAX_BUCKET_SIZE = 128;
 
+   /// The memory resource every table allocates from
+   std::pmr::memory_resource* memory;
    /// The direct-lookup table for the 2-byte/1-byte tail: entry >= 256 is the id of a 2-byte
    /// symbol, entry < 256 is the (identity) id of the single-byte symbol of the low byte
-   std::vector<uint16_t> shortTokenArray;
+   Vector<uint16_t> shortTokenArray;
    /// The dynamic lookup tables for symbols of 3 and 4 bytes (keys left-shifted to the top)
    std::array<TrainMap<uint32_t, uint16_t>, 2> tokenMaps4;
    /// The dynamic lookup tables for symbols of 5 to 8 bytes (keys left-shifted to the top)
    std::array<TrainMap<uint64_t, uint16_t>, 4> tokenMaps8;
    /// The lookup table for long symbols (> 8 bytes): prefix -> [(suffix, suffixLen, id)]
-   TrainMap<uint64_t, std::vector<std::tuple<uint64_t, uint8_t, uint16_t>>> longLookupTable;
+   TrainMap<uint64_t, Vector<std::tuple<uint64_t, uint8_t, uint16_t>>> longLookupTable;
 
    /// The static compression table for 3-byte symbols (key = symbol << 8; lossy, so rarely a
    /// 3-byte symbol is dropped and simply never matched) - built by finalize()
@@ -99,8 +102,12 @@ class Tokenizer {
    static bool isPrefix(uint64_t text, uint64_t prefix, size_t textLen, size_t prefixLen);
 
    public:
-   /// Constructor: the tail array starts as the identity of the low byte (single-byte symbols)
-   Tokenizer() : shortTokenArray(65536) {
+   /// Constructor: the tail array starts as the identity of the low byte (single-byte symbols); every
+   /// table allocates from `memory`
+   explicit Tokenizer(std::pmr::memory_resource* memory = std::pmr::get_default_resource())
+      : memory(memory), shortTokenArray(65536, memory), tokenMaps4{TrainMap<uint32_t, uint16_t>(memory), TrainMap<uint32_t, uint16_t>(memory)},
+        tokenMaps8{TrainMap<uint64_t, uint16_t>(memory), TrainMap<uint64_t, uint16_t>(memory), TrainMap<uint64_t, uint16_t>(memory), TrainMap<uint64_t, uint16_t>(memory)},
+        longLookupTable(memory), tokenMap3(memory), shortTokenMap(memory), longTokenMap(memory) {
       for (size_t i = 0; i < shortTokenArray.size(); ++i) shortTokenArray[i] = static_cast<uint16_t>(i % 256);
    }
 

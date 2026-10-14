@@ -24,7 +24,7 @@ std::vector<std::byte> readFile(const std::string& path) {
    return data;
 }
 //---------------------------------------------------------------------------
-void writeFile(const std::string& path, const std::vector<std::byte>& data) {
+void writeFile(const std::string& path, std::span<const std::byte> data) {
    std::ofstream file(path, std::ios::binary | std::ios::trunc);
    if (!file) throw std::runtime_error("cannot open output file: " + path);
    file.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));
@@ -44,7 +44,7 @@ int main(int argc, char** argv) {
    try {
       const bool compress = std::strcmp(argv[1], "c") == 0;
       const auto input = readFile(argv[2]);
-      std::vector<std::byte> output;
+      opp::Vector<std::byte> output;
 
       const auto begin = std::chrono::steady_clock::now();
       if (compress)

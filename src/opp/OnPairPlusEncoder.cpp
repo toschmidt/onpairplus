@@ -31,14 +31,14 @@ void OnPairPlusEncoder::trainDictionary(const std::span<const std::byte> rawInpu
    tokenizer.reserve(trainedTokenLimit);
 
    // The offsets to the symbols in the dictionary
-   std::vector<uint32_t> symbolOffsets;
+   Vector<uint32_t> symbolOffsets(memory);
    symbolOffsets.reserve(trainedTokenLimit);
    symbolOffsets.push_back(0);
    // The symbols
-   std::vector<uint8_t> symbolDictionary;
+   Vector<uint8_t> symbolDictionary(memory);
    symbolDictionary.reserve(trainedTokenLimit * MAX_SYMBOL_LENGTH);
    // A mapping from a token id to its parent token ids, i.e. the tokens that were merged to create it
-   TrainMap<uint16_t, std::pair<uint16_t, uint16_t>> childToParents;
+   TrainMap<uint16_t, std::pair<uint16_t, uint16_t>> childToParents(memory);
    childToParents.reserve(trainedTokenLimit);
 
    // The training sample: chunkCount^(3/4) chunks, so the sampled fraction shrinks smoothly as
@@ -49,7 +49,7 @@ void OnPairPlusEncoder::trainDictionary(const std::span<const std::byte> rawInpu
    const size_t sampleSize = std::min(inputSize, sampleChunks * TRAIN_CHUNK_SIZE);
 
    // Tracks the frequency of token pairs
-   TrainMap<std::pair<uint16_t, uint16_t>, uint16_t> frequency;
+   TrainMap<std::pair<uint16_t, uint16_t>, uint16_t> frequency(memory);
    // Set the threshold for merging tokens based on the size of the training sample
    const double sampleSizeMiB = static_cast<double>(sampleSize) / (1024.0 * 1024.0);
    const auto threshold = static_cast<size_t>(std::fmax(std::log2(sampleSizeMiB), 2.0));
@@ -72,7 +72,7 @@ void OnPairPlusEncoder::trainDictionary(const std::span<const std::byte> rawInpu
    // is drawn evenly from the whole input instead of overfitting its beginning. charFreq (for the
    // n-gram seeding below) is computed on the same sample.
    std::array<uint64_t, 256> charFreq{};
-   std::vector<uint32_t> shuffledChunks(chunkCount);
+   Vector<uint32_t> shuffledChunks(chunkCount, memory);
    std::iota(shuffledChunks.begin(), shuffledChunks.end(), 0);
    std::mt19937 g(42);
    std::shuffle(shuffledChunks.begin(), shuffledChunks.end(), g);
@@ -150,7 +150,9 @@ void OnPairPlusEncoder::trainDictionary(const std::span<const std::byte> rawInpu
    size_t distinct = 0;
    for (unsigned b = 0; b < 256; ++b)
       if (charFreq[b]) byOrder[distinct++] = static_cast<uint8_t>(b);
-   std::stable_sort(byOrder.begin(), byOrder.begin() + distinct, [&](uint8_t a, uint8_t b) { return charFreq[a] > charFreq[b]; });
+   // Ties keep the ascending character order (std::sort with the character as tie-break; std::stable_sort
+   // would take its buffer from the global heap)
+   std::sort(byOrder.begin(), byOrder.begin() + distinct, [&](uint8_t a, uint8_t b) { return charFreq[a] > charFreq[b] || (charFreq[a] == charFreq[b] && a < b); });
    double sampleBytes = 0;
    for (unsigned b = 0; b < 256; ++b) sampleBytes += static_cast<double>(charFreq[b]);
 
@@ -233,17 +235,18 @@ void OnPairPlusEncoder::trainDictionary(const std::span<const std::byte> rawInpu
       };
 
       // Kept trained ids (all trained except the n-gram duplicates), length-sorted so parents precede
-      std::vector<uint16_t> kept;
+      Vector<uint16_t> kept(memory);
       kept.reserve(usedC - baseSymbols);
       for (size_t id = baseSymbols; id < usedC; ++id)
          if (asNgram(id) < 0) kept.push_back(static_cast<uint16_t>(id));
-      std::stable_sort(kept.begin(), kept.end(), [&](uint16_t a, uint16_t b) { return lengthOf(a) < lengthOf(b); });
+      // Ties keep the ascending id order kept was filled in (std::sort with the id as tie-break)
+      std::sort(kept.begin(), kept.end(), [&](uint16_t a, uint16_t b) { return lengthOf(a) < lengthOf(b) || (lengthOf(a) == lengthOf(b) && a < b); });
 
       // Final id of every training id in [0, usedC + totalNgrams): singles keep their id, a dropped
       // n-gram duplicate maps to its n-gram id, each kept trained symbol lands just past the whole
       // n-gram block, and the contiguous n-gram temp ids (usedC + m) map straight to their final ids
       // (256 + m), since both were laid out in the same order.
-      std::vector<uint16_t> remap(usedC + totalNgrams);
+      Vector<uint16_t> remap(usedC + totalNgrams, memory);
       for (size_t k = 0; k < baseSymbols; ++k) remap[k] = static_cast<uint16_t>(k);
       for (size_t p = 0; p < kept.size(); ++p) remap[kept[p]] = static_cast<uint16_t>(baseSymbols + totalNgrams + p);
       for (size_t id = baseSymbols; id < usedC; ++id) {
@@ -305,8 +308,8 @@ void OnPairPlusEncoder::trainDictionary(const std::span<const std::byte> rawInpu
    // from the same merge sequence, tokenize the evaluation prefix with each, and keep whichever
    // spends fewer bits. Below the threshold the full table cannot be reached anyway, so only the
    // small candidate is built.
-   Candidate candidate12;
-   Candidate candidateFull;
+   Candidate candidate12(memory);
+   Candidate candidateFull(memory);
    tokenCount12Value = 0;
    tokenCount16Value = 0;
    bool use12 = true;

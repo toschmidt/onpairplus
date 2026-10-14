@@ -107,7 +107,7 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
    // trained symbols (frequent by construction) first, then the n-gram trigrams in level order
    // (most frequent characters first), so a collision drops the least valuable symbol.
    {
-      std::vector<std::pair<uint32_t, uint16_t>> symbols3;
+      Vector<std::pair<uint32_t, uint16_t>> symbols3(memory);
       symbols3.reserve(tokenMaps4[0].size());
       for (const auto& [key, id] : tokenMaps4[0])
          if (key != 0) symbols3.emplace_back(key, id); // key 0 is the map's empty sentinel
@@ -116,7 +116,7 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
          return aTrained != bTrained ? aTrained : a.second < b.second;
       });
 
-      std::vector<uint32_t> keys;
+      Vector<uint32_t> keys(memory);
       keys.reserve(symbols3.size());
       for (const auto& [key, id] : symbols3) keys.push_back(key);
       tokenMap3.initialize(keys);
@@ -126,7 +126,7 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
    // The 4..8 byte map, keyed by the first 4 bytes, bucket entries sorted longest-first (ties
    // broken by id for deterministic output)
    {
-      std::vector<ShortTokenEntry> entries;
+      Vector<ShortTokenEntry> entries(memory);
       entries.reserve(tokenMaps4[1].size() + tokenMaps8[0].size() + tokenMaps8[1].size() + tokenMaps8[2].size() + tokenMaps8[3].size());
       for (const auto& [key, id] : tokenMaps4[1])
          entries.push_back({key, id, 4});
@@ -137,7 +137,7 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
          return a.length != b.length ? a.length > b.length : a.id < b.id;
       });
 
-      std::vector<uint32_t> keys;
+      Vector<uint32_t> keys(memory);
       keys.reserve(entries.size());
       for (const auto& entry : entries) keys.push_back(static_cast<uint32_t>(entry.text));
       shortTokenMap.initialize(keys);
@@ -149,7 +149,7 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
    // The long symbol map (9..16 bytes), keyed by the first 8 bytes, bucket entries sorted
    // longest-first (ties broken by id for deterministic output)
    {
-      std::vector<LongTokenEntry> entries;
+      Vector<LongTokenEntry> entries(memory);
       for (const auto& [prefix, bucket] : longLookupTable)
          for (const auto& [suffix, suffixLen, id] : bucket)
             entries.push_back({prefix, suffix, id, 8u + suffixLen});
@@ -157,7 +157,7 @@ void Tokenizer::finalize(const uint16_t firstTrainedId)
          return a.length != b.length ? a.length > b.length : a.id < b.id;
       });
 
-      std::vector<uint64_t> keys;
+      Vector<uint64_t> keys(memory);
       keys.reserve(entries.size());
       for (const auto& entry : entries) keys.push_back(entry.prefix);
       longTokenMap.initialize(keys);

@@ -1,6 +1,7 @@
 #pragma once
 //---------------------------------------------------------------------------
 #include "util/Hash.hpp"
+#include "util/Infra.hpp"
 #include <cassert>
 #include <cstdint>
 #include <span>
@@ -20,11 +21,11 @@ class MultiHashMap {
    /// The right-shift mapping a hash to a slot
    uint32_t shift = 63;
    /// The directory (bucket boundaries into values)
-   std::vector<uint32_t> directory;
+   Vector<uint32_t> directory;
    /// The values
-   std::vector<Value> values;
+   Vector<Value> values;
    /// The per-bucket insert counters
-   std::vector<uint32_t> insertCounter;
+   Vector<uint32_t> insertCounter;
 
    /// Map a key to its slot
    uint64_t slotOf(const Key key) const noexcept { return fasthash(static_cast<uint64_t>(key)) >> shift; }
@@ -32,7 +33,7 @@ class MultiHashMap {
    public:
    /// Constructor: an empty map still maps a key to slot 0 or 1 (shift 63), and find() reads the
    /// directory at slot + 1, so it needs three empty entries
-   MultiHashMap() { directory.resize(3, 0); }
+   explicit MultiHashMap(Allocator alloc = {}) : directory(3, 0, alloc), values(alloc), insertCounter(alloc) {}
 
    /// Whether the map holds no entries
    bool empty() const noexcept { return values.empty(); }
